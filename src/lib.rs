@@ -1,6 +1,8 @@
 mod memtable;
+mod sstable;
 
 pub use memtable::{Memtable, Value};
+pub use sstable::{SSTable, SSTableBuilder};
 
 use std::io;
 
