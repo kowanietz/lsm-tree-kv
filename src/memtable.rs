@@ -9,7 +9,7 @@ pub enum Value {
     Tombstone,
 }
 
-/// In-memory write buffer using a BTreeMap for sorted storage
+/// In-memory write buffer using a `BTreeMap` for sorted storage
 pub struct Memtable {
     /// Sorted map of keys to values
     data: BTreeMap<Vec<u8>, Value>,
@@ -19,8 +19,8 @@ pub struct Memtable {
 
 impl Memtable {
     /// Creates a new empty memtable
-    pub fn new() -> Self {
-        Memtable {
+    pub const fn new() -> Self {
+        Self {
             data: BTreeMap::new(),
             size_bytes: 0,
         }
@@ -37,7 +37,7 @@ impl Memtable {
             self.size_bytes += value.len();
         } else {
             // no replacement -> add full kv-pair-size
-            self.size_bytes += key.len() + value.len()
+            self.size_bytes += key.len() + value.len();
         }
 
         self.data.insert(key, Value::Some(value));
@@ -78,7 +78,7 @@ impl Memtable {
     }
 
     /// Get the number of bytes
-    pub fn size_bytes(&self) -> usize {
+    pub const fn size_bytes(&self) -> usize {
         self.size_bytes
     }
 }
@@ -209,7 +209,10 @@ mod tests {
 
         // delete should update size
         memtable.delete(key1.clone());
-        assert_eq!(memtable.size_bytes(), key1.len() + key2.len() + value3.len());
+        assert_eq!(
+            memtable.size_bytes(),
+            key1.len() + key2.len() + value3.len()
+        );
     }
 
     #[test]

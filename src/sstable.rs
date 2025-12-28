@@ -1,8 +1,8 @@
-//! SSTable implementation
+//! `SSTable` implementation
 //!
 //! # File Format Specification
 //!
-//! An SSTable file consists of three main sections:
+//! An `SSTable` file consists of three main sections:
 //!
 //! ```text
 //! ┌─────────────────────────────────────────┐
@@ -57,13 +57,13 @@ use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
-/// Magic number for SSTable files: "SSTABLE1" in ASCII
-const MAGIC_NUMBER: u64 = 0x5353544142454c31;
+/// Magic number for `SSTable` files: "SSTABLE1" in ASCII
+const MAGIC_NUMBER: u64 = 0x5353_5441_4245_4c31;
 
 /// Size of the footer in bytes
 const FOOTER_SIZE: u64 = 32;
 
-/// SSTable builder class
+/// `SSTable` builder class
 pub struct SSTableBuilder {
     /// Buffered writer
     writer: BufWriter<File>,
@@ -76,12 +76,12 @@ pub struct SSTableBuilder {
 }
 
 impl SSTableBuilder {
-    /// Instantiates new  SSTable builder
+    /// Instantiates new  `SSTable` builder
     pub fn new(path: PathBuf) -> Result<Self> {
         let file = File::create(&path).expect("Error creating file");
         let writer = BufWriter::new(file);
 
-        Ok(SSTableBuilder {
+        Ok(Self {
             writer,
             index: Vec::new(),
             current_offset: 0,
@@ -89,7 +89,7 @@ impl SSTableBuilder {
         })
     }
 
-    /// Add a key-value pair to the SSTable
+    /// Add a key-value pair to the `SSTable`
     //  !! must be added in sorted order
     pub fn add(&mut self, key: &[u8], value: &Value) -> Result<()> {
         let offset = self.current_offset;
@@ -136,7 +136,7 @@ impl SSTableBuilder {
         Ok(())
     }
 
-    /// Finish writing the SSTable and flush to disk
+    /// Finish writing the `SSTable` and flush to disk
     pub fn finish(mut self) -> Result<()> {
         let index_offset = self.current_offset;
 
@@ -168,7 +168,7 @@ impl SSTableBuilder {
     }
 }
 
-/// SSTable reader
+/// `SSTable` reader
 pub struct SSTable {
     /// File path
     path: PathBuf,
@@ -176,12 +176,12 @@ pub struct SSTable {
     file: File,
     /// In-memory index: key → offset in data block
     index: BTreeMap<Vec<u8>, u64>,
-    /// Number of entries in the SSTable
+    /// Number of entries in the `SSTable`
     num_entries: u32,
 }
 
 impl SSTable {
-    /// Open an existing SSTable
+    /// Open an existing `SSTable`
     pub fn open(path: PathBuf) -> Result<Self> {
         let mut file = File::open(&path)?;
 
@@ -200,8 +200,7 @@ impl SSTable {
         // validate magic number
         if magic != MAGIC_NUMBER {
             return Err(Error::Corruption(format!(
-                "Invalid magic number: expected 0x{:x}, got 0x{:x}",
-                MAGIC_NUMBER, magic
+                "Invalid magic number: expected 0x{MAGIC_NUMBER:x}, got 0x{magic:x}"
             )));
         }
 
@@ -227,7 +226,7 @@ impl SSTable {
             index.insert(key, offset);
         }
 
-        Ok(SSTable {
+        Ok(Self {
             path,
             file,
             index,
@@ -287,13 +286,13 @@ impl SSTable {
         }
     }
 
-    /// Get the number of entries in the SSTable
-    pub fn num_entries(&self) -> u32 {
+    /// Get the number of entries in the `SSTable`
+    pub const fn num_entries(&self) -> u32 {
         self.num_entries
     }
 
     /// Get the file path
-    pub fn path(&self) -> &PathBuf {
+    pub const fn path(&self) -> &PathBuf {
         &self.path
     }
 }
