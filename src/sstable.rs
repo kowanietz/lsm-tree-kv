@@ -297,3 +297,215 @@ impl SSTable {
         &self.path
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    /// Creates test path
+    fn test_path(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join("lsm-tree-kv-test");
+        fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    #[test]
+    fn test_write_read_single_entry() {
+        let path = test_path("single_entry.sst");
+        let _ = fs::remove_file(&path); // Clean up if exists
+
+        // Write
+        {
+            let mut builder =
+                SSTableBuilder::new(path.clone()).expect("SSTableBuilder creation failed");
+            builder
+                .add(b"key1", &Value::Some(b"value1".to_vec()))
+                .unwrap();
+            builder.finish().unwrap();
+        }
+
+        // Read
+        {
+            let mut sst = SSTable::open(path.clone()).unwrap();
+            let value = sst.get(b"key1").unwrap();
+            assert_eq!(value, Some(Value::Some(b"value1".to_vec())));
+            assert_eq!(sst.num_entries(), 1);
+        }
+
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn test_write_read_multiple_entries() {
+        let path = test_path("multiple_entries.sst");
+        let _ = fs::remove_file(&path);
+
+        // Write
+        {
+            let mut builder = SSTableBuilder::new(path.clone()).unwrap();
+            for i in 0..100 {
+                let key = format!("key{:03}", i);
+                let value = format!("value{:03}", i);
+                builder
+                    .add(key.as_bytes(), &Value::Some(value.as_bytes().to_vec()))
+                    .unwrap();
+            }
+            builder.finish().unwrap();
+        }
+
+        // Read
+        {
+            let mut sst = SSTable::open(path.clone()).unwrap();
+            assert_eq!(sst.num_entries(), 100);
+
+            for i in 0..100 {
+                let key = format!("key{:03}", i);
+                let expected_value = format!("value{:03}", i);
+                let value = sst.get(key.as_bytes()).unwrap();
+                assert_eq!(value, Some(Value::Some(expected_value.as_bytes().to_vec())));
+            }
+        }
+
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn test_read_nonexistent_key() {
+        let path = test_path("nonexistent.sst");
+        let _ = fs::remove_file(&path);
+
+        // Write
+        {
+            let mut builder = SSTableBuilder::new(path.clone()).unwrap();
+            builder
+                .add(b"key1", &Value::Some(b"value1".to_vec()))
+                .unwrap();
+            builder.finish().unwrap();
+        }
+
+        // Read
+        {
+            let mut sst = SSTable::open(path.clone()).unwrap();
+            let value = sst.get(b"nonexistent").unwrap();
+            assert_eq!(value, None);
+        }
+
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn test_tombstone_persistence() {
+        let path = test_path("tombstone.sst");
+        let _ = fs::remove_file(&path);
+
+        // Write
+        {
+            let mut builder = SSTableBuilder::new(path.clone()).unwrap();
+            builder.add(b"key1", &Value::Tombstone).unwrap();
+            builder
+                .add(b"key2", &Value::Some(b"value2".to_vec()))
+                .unwrap();
+            builder.finish().unwrap();
+        }
+
+        // Read
+        {
+            let mut sst = SSTable::open(path.clone()).unwrap();
+            let value1 = sst.get(b"key1").unwrap();
+            assert_eq!(value1, Some(Value::Tombstone));
+
+            let value2 = sst.get(b"key2").unwrap();
+            assert_eq!(value2, Some(Value::Some(b"value2".to_vec())));
+        }
+
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn test_reopen_sstable() {
+        let path = test_path("reopen.sst");
+        let _ = fs::remove_file(&path);
+
+        // Write
+        {
+            let mut builder = SSTableBuilder::new(path.clone()).unwrap();
+            builder
+                .add(b"key1", &Value::Some(b"value1".to_vec()))
+                .unwrap();
+            builder
+                .add(b"key2", &Value::Some(b"value2".to_vec()))
+                .unwrap();
+            builder.finish().unwrap();
+        }
+
+        // Read, close, and reopen
+        {
+            let mut sst = SSTable::open(path.clone()).unwrap();
+            let value = sst.get(b"key1").unwrap();
+            assert_eq!(value, Some(Value::Some(b"value1".to_vec())));
+        } // sst is dropped here
+
+        // Reopen
+        {
+            let mut sst = SSTable::open(path.clone()).unwrap();
+            let value = sst.get(b"key2").unwrap();
+            assert_eq!(value, Some(Value::Some(b"value2".to_vec())));
+        }
+
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn test_corrupted_magic_number() {
+        let path = test_path("corrupted.sst");
+        let _ = fs::remove_file(&path);
+
+        // Write valid SSTable
+        {
+            let mut builder = SSTableBuilder::new(path.clone()).unwrap();
+            builder
+                .add(b"key1", &Value::Some(b"value1".to_vec()))
+                .unwrap();
+            builder.finish().unwrap();
+        }
+
+        // Corrupt the magic number
+        {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+            file.seek(SeekFrom::End(-16)).unwrap();
+            file.write_all(&0u64.to_le_bytes()).unwrap(); // corrupt magic
+        }
+
+        // Try to open
+        let result = SSTable::open(path.clone());
+        assert!(result.is_err());
+        match result {
+            Err(Error::Corruption(_)) => {}
+            _ => panic!("Expected corruption error"),
+        }
+
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn test_empty_sstable() {
+        let path = test_path("empty.sst");
+        let _ = fs::remove_file(&path);
+
+        // Write empty SSTable
+        {
+            let builder = SSTableBuilder::new(path.clone()).unwrap();
+            builder.finish().unwrap();
+        }
+
+        // Read
+        {
+            let sst = SSTable::open(path.clone()).unwrap();
+            assert_eq!(sst.num_entries(), 0);
+        }
+
+        fs::remove_file(&path).unwrap();
+    }
+}
