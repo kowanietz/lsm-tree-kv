@@ -189,12 +189,14 @@ mod tests {
         assert!(tree.memtable.is_empty());
 
         // SSTable file should exist
-        let sst_files: Vec<_> = fs::read_dir(&path)
-            .unwrap()
-            .filter_map(std::result::Result::ok)
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "sst"))
-            .collect();
-        assert_eq!(sst_files.len(), 1);
+        assert_eq!(
+            fs::read_dir(&path)
+                .unwrap()
+                .filter_map(std::result::Result::ok)
+                .filter(|e| e.path().extension().is_some_and(|ext| ext == "sst"))
+                .count(),
+            1
+        );
     }
 
     #[test]
