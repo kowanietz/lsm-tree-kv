@@ -86,6 +86,15 @@ impl Memtable {
     }
 }
 
+impl<'a> IntoIterator for &'a Memtable {
+    type Item = (&'a Vec<u8>, &'a Value);
+    type IntoIter = btree_map::Iter<'a, Vec<u8>, Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 impl Default for Memtable {
     fn default() -> Self {
         Self::new()

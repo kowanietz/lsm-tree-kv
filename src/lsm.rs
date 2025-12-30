@@ -13,7 +13,7 @@ const MEMTABLE_SIZE_THRESHOLD: usize = 4096; // 4KB
 pub struct LSMTree {
     /// Active in-memory table
     memtable: Memtable,
-    /// Queue of flushed SSTables (L0)
+    /// Queue of flushed `SSTables` (L0)
     l0_sstables: VecDeque<SSTable>,
     /// Path to the data directory
     data_dir: PathBuf,
@@ -25,16 +25,16 @@ impl LSMTree {
     /// Opens LSM-Tree at the given path.
     ///
     /// creates the directory if it doesn't exist and
-    /// recovers the state from any existing SSTable files.
+    /// recovers the state from any existing `SSTable` files.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let data_dir = path.as_ref().to_path_buf();
         fs::create_dir_all(&data_dir)?;
 
         // find all existing sstbales
         let mut sst_paths: Vec<PathBuf> = fs::read_dir(&data_dir)?
-            .filter_map(|entry| entry.ok())
+            .filter_map(std::result::Result::ok)
             .map(|entry| entry.path())
-            .filter(|p| p.extension().map_or(false, |ext| ext == "sst"))
+            .filter(|p| p.extension().is_some_and(|ext| ext == "sst"))
             .collect();
 
         // sort -> creation order
@@ -110,18 +110,18 @@ impl LSMTree {
         Ok(())
     }
 
-    /// Flushes the current memtable to a new L0 SSTable.
+    /// Flushes the current memtable to a new L0 `SSTable`.
     fn flush_memtable(&mut self) -> Result<()> {
         if self.memtable.is_empty() {
             return Ok(());
         }
 
         let sst_num = self.sst_counter.fetch_add(1, Ordering::SeqCst);
-        let sst_path = self.data_dir.join(format!("{:08}.sst", sst_num));
+        let sst_path = self.data_dir.join(format!("{sst_num:08}.sst"));
 
         // flush memtable to new SSTable
         let mut builder = SSTableBuilder::new(sst_path.clone())?;
-        for (key, value) in self.memtable.iter() {
+        for (key, value) in &self.memtable {
             builder.add(key, value)?;
         }
         builder.finish()?;
@@ -191,8 +191,8 @@ mod tests {
         // SSTable file should exist
         let sst_files: Vec<_> = fs::read_dir(&path)
             .unwrap()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "sst"))
+            .filter_map(std::result::Result::ok)
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "sst"))
             .collect();
         assert_eq!(sst_files.len(), 1);
     }

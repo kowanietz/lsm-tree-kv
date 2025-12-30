@@ -344,8 +344,8 @@ mod tests {
         {
             let mut builder = SSTableBuilder::new(path.clone()).unwrap();
             for i in 0..100 {
-                let key = format!("key{:03}", i);
-                let value = format!("value{:03}", i);
+                let key = format!("key{i:03}");
+                let value = format!("value{i:03}");
                 builder
                     .add(key.as_bytes(), &Value::Some(value.as_bytes().to_vec()))
                     .unwrap();
@@ -359,8 +359,8 @@ mod tests {
             assert_eq!(sst.num_entries(), 100);
 
             for i in 0..100 {
-                let key = format!("key{:03}", i);
-                let expected_value = format!("value{:03}", i);
+                let key = format!("key{i:03}");
+                let expected_value = format!("value{i:03}");
                 let value = sst.get(key.as_bytes()).unwrap();
                 assert_eq!(value, Some(Value::Some(expected_value.as_bytes().to_vec())));
             }
