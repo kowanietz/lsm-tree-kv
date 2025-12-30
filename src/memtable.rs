@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::btree_map;
 
 /// Represents a value in the memtable
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,11 +45,8 @@ impl Memtable {
     }
 
     /// Get value of a key
-    pub fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-        match self.data.get(key) {
-            Some(Value::Some(value)) => Some(value.clone()),
-            Some(Value::Tombstone) | None => None,
-        }
+    pub fn get(&self, key: &[u8]) -> Option<&Value> {
+        self.data.get(key)
     }
 
     /// Delete an entry by key
@@ -65,6 +63,11 @@ impl Memtable {
         }
 
         self.data.insert(key, Value::Tombstone);
+    }
+
+    /// Returns iterator over the memtalbe
+    pub fn iter(&self) -> btree_map::Iter<Vec<u8>, Value> {
+        self.data.iter()
     }
 
     /// Get number of entries
@@ -102,7 +105,7 @@ mod tests {
         memtable.put(key.clone(), value.clone());
         let result = memtable.get(&key);
 
-        assert_eq!(result, Some(value));
+        assert_eq!(result, Some(&Value::Some(value)));
     }
 
     #[test]
@@ -126,7 +129,7 @@ mod tests {
         memtable.delete(key.clone());
 
         // should be a tombstone internally
-        assert_eq!(memtable.data.get(&key), Some(&Value::Tombstone));
+        assert_eq!(memtable.get(&key), Some(&Value::Tombstone));
     }
 
     #[test]
@@ -139,9 +142,9 @@ mod tests {
         memtable.put(key.clone(), value);
         memtable.delete(key.clone());
 
-        // should return None
+        // should return tombstone
         let result = memtable.get(&key);
-        assert_eq!(result, None);
+        assert_eq!(result, Some(&Value::Tombstone));
     }
 
     #[test]
@@ -157,7 +160,7 @@ mod tests {
 
         // should be the second value
         let result = memtable.get(&key);
-        assert_eq!(result, Some(value2));
+        assert_eq!(result, Some(&Value::Some(value2)));
 
         // should be exactly 1 entry
         assert_eq!(memtable.len(), 1);
@@ -173,7 +176,7 @@ mod tests {
         memtable.put(b"key2".to_vec(), b"value2".to_vec());
 
         // should be sorted internally
-        let keys: Vec<_> = memtable.data.keys().map(|k| k.clone()).collect();
+        let keys: Vec<_> = memtable.iter().map(|(k, _v)| k.clone()).collect();
 
         assert_eq!(
             keys,
@@ -242,10 +245,8 @@ mod tests {
         memtable.delete(key.clone());
 
         // deleting a nonexistent key should create a tombstone
-        assert_eq!(memtable.data.get(&key), Some(&Value::Tombstone));
+        assert_eq!(memtable.get(&key), Some(&Value::Tombstone));
         assert_eq!(memtable.len(), 1);
-
-        assert_eq!(memtable.get(&key), None);
     }
 
     #[test]
@@ -259,7 +260,6 @@ mod tests {
         memtable.delete(key.clone());
 
         // should still be a tombstone
-        assert_eq!(memtable.data.get(&key), Some(&Value::Tombstone));
-        assert_eq!(memtable.get(&key), None);
+        assert_eq!(memtable.get(&key), Some(&Value::Tombstone));
     }
 }

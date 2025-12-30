@@ -1,6 +1,8 @@
+mod lsm;
 mod memtable;
 mod sstable;
 
+pub use lsm::LSMTree;
 pub use memtable::{Memtable, Value};
 pub use sstable::{SSTable, SSTableBuilder};
 
